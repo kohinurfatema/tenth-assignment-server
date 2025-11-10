@@ -47,3 +47,25 @@ const verifyFireBaseToken = async (req, res, next) => {
         return res.status(401).send({ message: 'unauthorized access' })
     }
 }
+
+
+
+// Middleware to verify custom JWT Token (for internal authorization flow)
+const verifyJWTToken = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ message: 'unauthorized access: no header' })
+    }
+    const token = authorization.split(' ')[1];
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access: no token' })
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'forbidden access: invalid token' })
+        }
+        req.user_email = decoded.email; 
+        next();
+    })
+}
