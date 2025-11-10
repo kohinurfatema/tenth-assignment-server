@@ -26,3 +26,24 @@ const logger = (req, res, next) => {
     next();
 }
 
+
+// Middleware to verify Firebase ID Token (for primary authentication)
+const verifyFireBaseToken = async (req, res, next) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ message: 'unauthorized access' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+    
+    try {
+        const userInfo = await admin.auth().verifyIdToken(token);
+        req.user_email = userInfo.email; 
+        req.user_uid = userInfo.uid; 
+        next();
+    }
+    catch {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+}
