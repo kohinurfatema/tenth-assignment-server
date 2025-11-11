@@ -1,77 +1,39 @@
+// ===================================
+// 1. Imports and Setup
+// ===================================
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
-const jwt = require('jsonwebtoken');
+require('dotenv').config(); // Load environment variables
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const admin = require("firebase-admin");
-const app = express();
-const port = process.env.PORT || 5000; // Using 5000 as default
+const jwt = require('jsonwebtoken');
 
-// 🚨 ADMIN SDK INITIALIZATION 
-// IMPORTANT: Replace the path/filename below with your actual Firebase Admin key file
-const serviceAccount = require("./eco-track-firebase-admin-key.json"); 
+// Firebase Admin Setup (for authentication middleware)
+const admin = require('firebase-admin');
+const serviceAccount = require("./eco-track-firebase-admin-key.json"); // Your admin key file
+
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 
+const app = express();
+const port = process.env.PORT || 5000;
 
-// ------------------------------------
-//          MIDDLEWARE
-// ------------------------------------
-app.use(cors());
-app.use(express.json())
+// ===================================
+// 2. Middleware
+// ===================================
+app.use(cors({
+    origin: [
+        'http://localhost:5173', // Your frontend URL for development
+        // Add your production frontend URL here when deploying
+    ],
+    credentials: true,
+}));
+app.use(express.json());
 
-const logger = (req, res, next) => {
-    console.log('Request received:', req.method, req.path);
-    next();
-}
-
-// Middleware to verify Firebase ID Token (for primary authentication)
-const verifyFireBaseToken = async (req, res, next) => {
-    if (!req.headers.authorization) {
-        return res.status(401).send({ message: 'unauthorized access' });
-    }
-    const token = req.headers.authorization.split(' ')[1];
-    if (!token) {
-        return res.status(401).send({ message: 'unauthorized access' })
-    }
-    
-    try {
-        const userInfo = await admin.auth().verifyIdToken(token);
-        req.user_email = userInfo.email; 
-        req.user_uid = userInfo.uid; 
-        next();
-    }
-    catch {
-        return res.status(401).send({ message: 'unauthorized access' })
-    }
-}
-
-// Middleware to verify custom JWT Token (for internal authorization flow)
-const verifyJWTToken = (req, res, next) => {
-    const authorization = req.headers.authorization;
-    if (!authorization) {
-        return res.status(401).send({ message: 'unauthorized access: no header' })
-    }
-    const token = authorization.split(' ')[1];
-    if (!token) {
-        return res.status(401).send({ message: 'unauthorized access: no token' })
-    }
-
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(403).send({ message: 'forbidden access: invalid token' })
-        }
-        req.user_email = decoded.email; 
-        next();
-    })
-}
-
-
-// ------------------------------------
-//         MONGODB CONNECTION
-// ------------------------------------
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.vyznij5.mongodb.net/ecoTrackDB?appName=Cluster0`;
+// ===================================
+// 3. MongoDB Connection
+// ===================================
+const uri = process.env.MONGO_URI; 
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -81,290 +43,123 @@ const client = new MongoClient(uri, {
     }
 });
 
-app.get('/', (req, res) => {
-    res.send('EcoTrack Server is running')
-})
+// ===================================
+// 4. JWT Middleware (Reusable function for route protection)
+// ===================================
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).send({ message: 'Unauthorized Access' });
+    }
+    const token = authHeader.split(' ')[1];
+    
+    // Replace 'your-jwt-secret' with the actual secret from your .env
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            console.error("Token verification failed:", err.message);
+            return res.status(401).send({ message: 'Forbidden Access' });
+        }
+        req.decoded = decoded;
+        next();
+    });
+};
 
 
+// ===================================
+// 5. Main Run Function (CRITICAL: All APIs MUST be defined here)
+// ===================================
 async function run() {
     try {
+        // Connect the client to the server (MANDATORY FIX)
         await client.connect();
+        console.log("MongoDB connected successfully!");
 
-        const db = client.db('ecoTrackDB'); 
-        
-        // 🚨 Collection Definitions (Matching your schema requirements)
+        // Define Collections
+        const db = client.db('ecoTrackDB');
         const challengesCollection = db.collection('challenges');
-        const userChallengesCollection = db.collection('userChallenges');
         const usersCollection = db.collection('users');
-        const tipsCollection = db.collection('tips'); // Defined but not yet used in APIs
-        const eventsCollection = db.collection('events'); // Defined but not yet used in APIs
-
+        const tasksCollection = db.collection('tasks');
 
         // ------------------------------------
-        //           JWT API
+        // A. JWT Generation API
         // ------------------------------------
-        app.post('/getToken', async (req, res) => {
-            const loggedUser = req.body; 
-            if (!loggedUser.email) {
-                return res.status(400).send({ message: 'Email required for token creation' });
-            }
-            const token = jwt.sign(loggedUser, process.env.JWT_SECRET, { expiresIn: '1h' })
-            res.send({ token: token })
-        })
+        app.post('/api/auth/jwt', async (req, res) => {
+            const user = req.body;
+            // Use your actual secret from the .env file
+            const token = jwt.sign(user, process.env.JWT_SECRET, {
+                expiresIn: '1h'
+            });
+            res.send({ token });
+        });
 
         // ------------------------------------
-        //            USERS APIs (Saves user to MongoDB after Firebase auth)
+        // B. CHALLENGES API (Fix for 404 error)
         // ------------------------------------
-        app.post('/users', async (req, res) => {
-            const newUser = req.body;
-            const email = newUser.email;
-            
-            if (!email) {
-                 return res.status(400).send({ message: 'Email is required.' });
-            }
-
-            const query = { email: email }
-            const existingUser = await usersCollection.findOne(query);
-
-            if (existingUser) {
-                res.send({ message: 'user already exists.' })
-            }
-            else {
-                const result = await usersCollection.insertOne({ 
-                    ...newUser, 
-                    role: 'user', 
-                    createdAt: new Date()
-                });
-                res.send(result);
-            }
-        })
         
-        // ------------------------------------
-        //           CHALLENGES APIs (Full CRUD + Join)
-        // ------------------------------------
-
-        // GET /api/challenges — list (supports filters, but implemented as simple list for now)
+        // GET ALL CHALLENGES (FIXES 404 ERROR)
         app.get('/api/challenges', async (req, res) => {
             try {
-                // Future: Implement filters based on req.query (e.g., category)
-                const cursor = challengesCollection.find({}); 
+                const cursor = challengesCollection.find({});
                 const result = await cursor.toArray();
                 res.send(result);
             } catch (error) {
-                res.status(500).send({ message: 'Failed to fetch challenges', error: error.message });
+                console.error("Error fetching challenges:", error);
+                res.status(500).send({ message: "Failed to fetch challenges" });
             }
         });
 
-        // GET /api/challenges/:id — details
+        // GET SINGLE CHALLENGE (Needed for Detail Page)
         app.get('/api/challenges/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ message: 'Invalid Challenge ID format.' });
-                }
-                const query = { _id: new ObjectId(id) };
-                const result = await challengesCollection.findOne(query);
-                
-                if (!result) {
-                    return res.status(404).send({ message: 'Challenge not found.' });
-                }
-
-                res.send(result);
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to fetch challenge.', error: error.message });
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const challenge = await challengesCollection.findOne(query);
+            if (!challenge) {
+                return res.status(404).send({ message: "Challenge not found" });
             }
+            res.send(challenge);
         });
 
-
-        // POST /api/challenges — create (Protected by Firebase Token)
-        app.post('/api/challenges', logger, verifyFireBaseToken, async (req, res) => {
-            try {
-                const newChallenge = { 
-                    ...req.body, 
-                    createdBy: req.user_email, // Set creator
-                    participants: 0, // Initialize participant count
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                };
-                
-                if (!newChallenge.title || !newChallenge.description || !newChallenge.category) {
-                     return res.status(400).send({ message: 'Missing required challenge fields.' });
-                }
-
-                const result = await challengesCollection.insertOne(newChallenge);
-                res.status(201).send(result);
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to create challenge.', error: error.message });
+        // ------------------------------------
+        // C. USERS API
+        // ------------------------------------
+        app.post('/api/users', async (req, res) => {
+            const user = req.body;
+            const query = { email: user.email };
+            const existingUser = await usersCollection.findOne(query);
+            if (existingUser) {
+                return res.send({ message: 'User already exists', insertedId: null });
             }
+            const result = await usersCollection.insertOne(user);
+            res.send(result);
         });
-
-
-        // PATCH /api/challenges/:id — update (Protected by Firebase Token)
-        app.patch('/api/challenges/:id', logger, verifyFireBaseToken, async (req, res) => {
-            try {
-                const id = req.params.id;
-                const updatedFields = req.body;
-                
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ message: 'Invalid Challenge ID format.' });
-                }
-
-                // 🚨 Authorization Check (Placeholder for production role check)
-                const existingChallenge = await challengesCollection.findOne({ _id: new ObjectId(id) });
-                if (!existingChallenge) {
-                    return res.status(404).send({ message: 'Challenge not found.' });
-                }
-                
-                // if (existingChallenge.createdBy !== req.user_email) {
-                //     return res.status(403).send({ message: 'forbidden access: not the challenge owner.' });
-                // }
-
-                const query = { _id: new ObjectId(id) };
-                const updateDoc = {
-                    $set: {
-                        ...updatedFields,
-                        updatedAt: new Date()
-                    }
-                };
-
-                const result = await challengesCollection.updateOne(query, updateDoc);
-                
-                if (result.matchedCount === 0) {
-                    return res.status(404).send({ message: 'Challenge not found or nothing changed.' });
-                }
-
-                res.send(result);
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to update challenge.', error: error.message });
-            }
-        });
-
-        // DELETE /api/challenges/:id — delete (Protected by Firebase Token)
-        app.delete('/api/challenges/:id', logger, verifyFireBaseToken, async (req, res) => {
-            try {
-                const id = req.params.id;
-                
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ message: 'Invalid Challenge ID format.' });
-                }
-
-                // 🚨 Authorization Check (Placeholder for production role check)
-                
-                const query = { _id: new ObjectId(id) };
-                const result = await challengesCollection.deleteOne(query);
-
-                if (result.deletedCount === 0) {
-                    return res.status(404).send({ message: 'Challenge not found.' });
-                }
-
-                res.send(result);
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to delete challenge.', error: error.message });
-            }
-        });
-
-        
-        // POST /api/challenges/join/:id — join challenge (Protected)
-        app.post('/api/challenges/join/:id', logger, verifyFireBaseToken, async (req, res) => {
-            try {
-                const challengeId = req.params.id;
-                const userId = req.user_uid; // Use the UID for user reference
-                const userEmail = req.user_email;
-
-                if (!ObjectId.isValid(challengeId)) {
-                    return res.status(400).send({ message: 'Invalid Challenge ID format.' });
-                }
-
-                const challengeObjectId = new ObjectId(challengeId);
-
-                // 1. Check if user has already joined
-                const existingJoin = await userChallengesCollection.findOne({ 
-                    userId: userId, 
-                    challengeId: challengeObjectId 
-                });
-
-                if (existingJoin) {
-                    return res.status(409).send({ message: 'User has already joined this challenge.' });
-                }
-
-                // 2. Insert new UserChallenge record
-                const newUserChallenge = {
-                    userId: userId, 
-                    userEmail: userEmail,
-                    challengeId: challengeObjectId,
-                    status: 'Ongoing', 
-                    progress: 0,
-                    joinDate: new Date(),
-                };
-                const joinResult = await userChallengesCollection.insertOne(newUserChallenge);
-
-                // 3. Increment participant count in the Challenges collection
-                await challengesCollection.updateOne(
-                    { _id: challengeObjectId },
-                    { $inc: { participants: 1 } }
-                );
-                
-                res.status(201).send({ 
-                    message: 'Successfully joined challenge!', 
-                    data: joinResult
-                });
-
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to join challenge.', error: error.message });
-            }
-        });
-
 
 
         // ------------------------------------
-        //          ACTIVITIES APIs (UserChallenges Retrieval)
+        // D. OTHER APIs (TASKS, etc.) would go here
         // ------------------------------------
 
-        // GET user's activities (Protected by JWT and email match)
-        app.get('/api/activities', logger, verifyJWTToken, async (req, res) => {
-            const email = req.query.email;
-            const query = {};
-            
-            if (email) {
-                query.userEmail = email; // Query activities based on email
-            }
 
-            if (email !== req.user_email) {
-                return res.status(403).send({ message: 'forbidden access: email mismatch' });
-            }
-            
-            try {
-                // Fetch UserChallenges (activities) and then use $lookup for the challenge details
-                const activities = await userChallengesCollection.aggregate([
-                    { $match: query },
-                    {
-                        $lookup: {
-                            from: "challenges",
-                            localField: "challengeId",
-                            foreignField: "_id",
-                            as: "challengeDetails"
-                        }
-                    },
-                    { $unwind: "$challengeDetails" } // Flatten the challengeDetails array
-                ]).toArray();
-
-                res.send(activities);
-            } catch (error) {
-                res.status(500).send({ message: 'Failed to fetch activities.', error: error.message });
-            }
-        });
-
-
+        // Send a final ping upon successful connection and setup
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    }
-    finally {
-        // ...
+
+    } finally {
+        // Note: Client connection is usually kept alive for Express server
+        // If you were not using Express, you would close the client here: await client.close();
     }
 }
 
-run().catch(console.dir)
+// Execute the main function
+run().catch(console.dir);
+
+
+// ===================================
+// 6. Root Routes and Listener
+// ===================================
+app.get('/', (req, res) => {
+    res.send('EcoTrack Server is running...');
+});
 
 app.listen(port, () => {
-    console.log(`EcoTrack server is running on port: ${port}`)
-})
+    console.log(`EcoTrack server is running on port: ${port}`);
+});
