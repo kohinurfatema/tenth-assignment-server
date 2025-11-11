@@ -26,7 +26,6 @@ const logger = (req, res, next) => {
     next();
 }
 
-
 // Middleware to verify Firebase ID Token (for primary authentication)
 const verifyFireBaseToken = async (req, res, next) => {
     if (!req.headers.authorization) {
@@ -47,8 +46,6 @@ const verifyFireBaseToken = async (req, res, next) => {
         return res.status(401).send({ message: 'unauthorized access' })
     }
 }
-
-
 
 // Middleware to verify custom JWT Token (for internal authorization flow)
 const verifyJWTToken = (req, res, next) => {
@@ -71,7 +68,6 @@ const verifyJWTToken = (req, res, next) => {
 }
 
 
-
 // ------------------------------------
 //         MONGODB CONNECTION
 // ------------------------------------
@@ -90,7 +86,6 @@ app.get('/', (req, res) => {
 })
 
 
-
 async function run() {
     try {
         await client.connect();
@@ -105,7 +100,7 @@ async function run() {
         const eventsCollection = db.collection('events'); // Defined but not yet used in APIs
 
 
-         // ------------------------------------
+        // ------------------------------------
         //           JWT API
         // ------------------------------------
         app.post('/getToken', async (req, res) => {
@@ -143,8 +138,7 @@ async function run() {
                 res.send(result);
             }
         })
-
-
+        
         // ------------------------------------
         //           CHALLENGES APIs (Full CRUD + Join)
         // ------------------------------------
@@ -160,7 +154,6 @@ async function run() {
                 res.status(500).send({ message: 'Failed to fetch challenges', error: error.message });
             }
         });
-
 
         // GET /api/challenges/:id — details
         app.get('/api/challenges/:id', async (req, res) => {
@@ -206,7 +199,6 @@ async function run() {
         });
 
 
-
         // PATCH /api/challenges/:id — update (Protected by Firebase Token)
         app.patch('/api/challenges/:id', logger, verifyFireBaseToken, async (req, res) => {
             try {
@@ -234,8 +226,6 @@ async function run() {
                         updatedAt: new Date()
                     }
                 };
-
-
 
                 const result = await challengesCollection.updateOne(query, updateDoc);
                 
@@ -273,9 +263,8 @@ async function run() {
             }
         });
 
-
-
-          // POST /api/challenges/join/:id — join challenge (Protected)
+        
+        // POST /api/challenges/join/:id — join challenge (Protected)
         app.post('/api/challenges/join/:id', logger, verifyFireBaseToken, async (req, res) => {
             try {
                 const challengeId = req.params.id;
