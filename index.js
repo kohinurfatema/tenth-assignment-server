@@ -23,6 +23,25 @@ const client = new MongoClient(uri, {
 });
 
 const seedData = {
+  users: [
+    {
+      email: 'demo@ecotrack.com',
+      displayName: 'Demo User',
+      role: 'user',
+      photoURL: 'https://i.pravatar.cc/150?u=demo@ecotrack.com',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    },
+    {
+      email: 'admin@ecotrack.com',
+      displayName: 'Admin User',
+      role: 'admin',
+      photoURL: 'https://i.pravatar.cc/150?u=admin@ecotrack.com',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+},    {      email: 'manager@ecotrack.com',      displayName: 'Manager User',      role: 'manager',      photoURL: 'https://i.pravatar.cc/150?u=manager@ecotrack.com',      createdAt: new Date('2024-01-01T00:00:00Z'),      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    },
+  ],
   featured: [
     {
       title: '30-Day Plastic Fast',
@@ -332,6 +351,7 @@ async function run() {
   collections.tips = db.collection('tips');
   collections.events = db.collection('events');
   collections.userChallenges = db.collection('userChallenges');
+  collections.users = db.collection('users');
 
   await seedCollection(collections.featuredChallenges, seedData.featured);
   await seedCollection(collections.liveStats, seedData.stats);
@@ -350,6 +370,8 @@ async function run() {
   await seedCollection(collections.challenges, challengeDocs);
   await seedCollection(collections.tips, seedData.tips);
   await seedCollection(collections.events, seedData.events);
+  await seedCollection(collections.users, seedData.users);
+  await collections.users.createIndex({ email: 1 }, { unique: true });
   await collections.userChallenges.createIndex({ userId: 1, challengeId: 1 }, { unique: true });
 
   await client.db('admin').command({ ping: 1 });
@@ -793,6 +815,93 @@ app.get('/api/events/upcoming', async (req, res) => {
 
 app.get('/', (req, res) => {
   res.send('EcoTrack Server is running...');
+});
+app.get('/api/users', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const items = await collections.users.find({}).toArray();
+    // Remove sensitive fields
+    const sanitized = items.map(({ password, ...user }) => user);
+    res.send(sanitized);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).send({ message: 'Unable to fetch users' });
+  }
+});
+
+app.get('/api/users/:email', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { email } = req.params;
+    const user = await collections.users.findOne({ email });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+    const { password, ...sanitized } = user;
+    res.send(sanitized);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).send({ message: 'Unable to fetch user' });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { email, displayName, role = 'user', photoURL } = req.body || {};
+    if (!email) {
+      return res.status(400).send({ message: 'Email is required' });
+    }
+    const existing = await collections.users.findOne({ email });
+    if (existing) {
+      // Update existing user
+      const update = { updatedAt: new Date() };
+      if (displayName) update.displayName = displayName;
+      if (photoURL) update.photoURL = photoURL;
+      await collections.users.updateOne({ email }, { $set: update });
+      const updated = await collections.users.findOne({ email });
+      return res.send(updated);
+    }
+    const doc = {
+      email,
+      displayName: displayName || email.split('@')[0],
+      role,
+      photoURL: photoURL || `https://i.pravatar.cc/150?u=${email}`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const result = await collections.users.insertOne(doc);
+    res.status(201).send({ _id: result.insertedId, ...doc });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).send({ message: 'Unable to create user' });
+  }
+});
+
+app.patch('/api/users/:email', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { email } = req.params;
+    const update = { ...req.body, updatedAt: new Date() };
+    delete update.email; // Don't allow email change
+    delete update.createdAt;
+    const result = await collections.users.findOneAndUpdate(
+      { email },
+      { $set: update },
+      { returnDocument: 'after' }
+    );
+    if (!result.value) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+    res.send(result.value);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).send({ message: 'Unable to update user' });
+  }
 });
 
 app.listen(port, () => {
