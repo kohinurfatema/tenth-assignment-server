@@ -7,10 +7,17 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['http://localhost:5173'],
-  credentials: true,
-}));
-app.use(express.json());
+    origin: [
+      'http://localhost:5173',
+      'https://eco-track-app.web.app',
+      'https://eco-track-app.firebaseapp.com',
+      'https://eco-track-authentication.web.app',
+      'https://eco-track-authentication.firebaseapp.com',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
+    credentials: true,
+  }));
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.rufixhv.mongodb.net/?appName=Cluster0`;
 
