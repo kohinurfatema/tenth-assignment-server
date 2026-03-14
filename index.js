@@ -3,6 +3,9 @@ const cors = require('cors');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+const isDev = process.env.NODE_ENV !== 'production';
+const log = (...args) => { if (isDev) log(...args); };
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -248,6 +251,96 @@ const seedData = {
       description: 'Shop local, sustainable, and handmade gifts for the holiday season.'
     },
   ],
+  blogs: [
+    {
+      title: '10 Simple Ways to Reduce Your Carbon Footprint Today',
+      excerpt: 'Small everyday changes can lead to massive environmental impact. From switching to LED bulbs to choosing plant-based meals twice a week, discover practical actions you can start right now.',
+      category: 'Lifestyle',
+      author: 'Sarah Johnson',
+      readTime: '5 min read',
+      image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=600',
+      slug: 'reduce-carbon-footprint',
+      date: new Date('2025-11-10'),
+      createdAt: new Date('2025-11-10'),
+    },
+    {
+      title: 'The Complete Guide to Zero-Waste Grocery Shopping',
+      excerpt: 'Learn how to shop smarter, bring the right containers, find bulk stores near you, and cut your household plastic waste by up to 90% with these proven strategies.',
+      category: 'Tips & Tricks',
+      author: 'Michael Chen',
+      readTime: '8 min read',
+      image: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600',
+      slug: 'zero-waste-grocery-shopping',
+      date: new Date('2025-11-08'),
+      createdAt: new Date('2025-11-08'),
+    },
+    {
+      title: 'How Our Community Saved 15,000 kg of CO2 This Month',
+      excerpt: 'EcoTrack members across 42 active challenges hit an incredible milestone. We break down which challenges had the biggest impact and what it means for the planet.',
+      category: 'Community',
+      author: 'Emma Wilson',
+      readTime: '4 min read',
+      image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600',
+      slug: 'community-co2-milestone',
+      date: new Date('2025-11-05'),
+      createdAt: new Date('2025-11-05'),
+    },
+    {
+      title: 'Why Composting at Home Is Easier Than You Think',
+      excerpt: 'Fear of smell, pests, and complexity stops most people. We bust the myths and walk you through a foolproof setup that takes less than 15 minutes.',
+      category: 'Tips & Tricks',
+      author: 'David Park',
+      readTime: '6 min read',
+      image: 'https://images.unsplash.com/photo-1588964895597-cfbcd9f8e849?w=600',
+      slug: 'home-composting-guide',
+      date: new Date('2025-11-03'),
+      createdAt: new Date('2025-11-03'),
+    },
+    {
+      title: 'New Research: Urban Green Spaces Cut City Temperatures by 4°C',
+      excerpt: 'A landmark study across 12 cities confirms that tree canopy and green rooftops are among the most cost-effective strategies for battling the urban heat island effect.',
+      category: 'Science',
+      author: 'Dr. Anika Rao',
+      readTime: '7 min read',
+      image: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=600',
+      slug: 'urban-green-spaces-research',
+      date: new Date('2025-10-30'),
+      createdAt: new Date('2025-10-30'),
+    },
+    {
+      title: 'Sustainable Travel: How to Explore the World Responsibly',
+      excerpt: 'Travel does not have to mean a large carbon footprint. From choosing trains over planes to supporting local economies, this guide covers the conscious explorer.',
+      category: 'Lifestyle',
+      author: 'Lucia Fernandez',
+      readTime: '9 min read',
+      image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600',
+      slug: 'sustainable-travel-guide',
+      date: new Date('2025-10-27'),
+      createdAt: new Date('2025-10-27'),
+    },
+    {
+      title: 'The Rise of Community Solar: Is It Right for Your Neighborhood?',
+      excerpt: 'You do not need rooftop panels to go solar. Community solar programs let renters and homeowners subscribe to a share of a local solar farm and cut electricity bills.',
+      category: 'News',
+      author: 'James Okonkwo',
+      readTime: '6 min read',
+      image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=600',
+      slug: 'community-solar-programs',
+      date: new Date('2025-10-24'),
+      createdAt: new Date('2025-10-24'),
+    },
+    {
+      title: "Plant-Based Eating: A Beginner's 30-Day Starter Plan",
+      excerpt: 'Going plant-based does not mean giving up delicious food. Our 30-day plan eases you in with familiar favourites reimagined, plus a complete shopping list for every week.',
+      category: 'Lifestyle',
+      author: 'Priya Sharma',
+      readTime: '10 min read',
+      image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600',
+      slug: 'plant-based-30-day-plan',
+      date: new Date('2025-10-20'),
+      createdAt: new Date('2025-10-20'),
+    },
+  ],
 };
 
 const collections = {};
@@ -359,6 +452,8 @@ async function run() {
   collections.events = db.collection('events');
   collections.userChallenges = db.collection('userChallenges');
   collections.users = db.collection('users');
+  collections.contacts = db.collection('contacts');
+  collections.blogs = db.collection('blogs');
 
   await seedCollection(collections.featuredChallenges, seedData.featured);
   await seedCollection(collections.liveStats, seedData.stats);
@@ -378,16 +473,45 @@ async function run() {
   await seedCollection(collections.tips, seedData.tips);
   await seedCollection(collections.events, seedData.events);
   await seedCollection(collections.users, seedData.users);
+  await seedCollection(collections.blogs, seedData.blogs);
   await collections.users.createIndex({ email: 1 }, { unique: true });
   await collections.userChallenges.createIndex({ userId: 1, challengeId: 1 }, { unique: true });
+  await collections.blogs.createIndex({ slug: 1 }, { unique: true });
 
   await client.db('admin').command({ ping: 1 });
   console.log('MongoDB connected and seed data ready.');
 }
 
 const dbReady = run().catch((err) => {
-  console.error('Database connection failed:', err);
+  if (process.env.NODE_ENV !== 'production') log('Database connection failed:', err);
 });
+
+// ─── Role-based middleware ────────────────────────────────────────────────────
+
+/**
+ * Checks the x-user-role header sent by the client.
+ * Admin routes are protected so only admin/manager roles can access them.
+ */
+const requireAdminOrManager = (req, res, next) => {
+  const role = req.headers['x-user-role'] || '';
+  const email = req.headers['x-user-email'] || '';
+  const isAdmin = role === 'admin' || email.includes('admin');
+  const isManager = role === 'manager' || email.includes('manager');
+  if (!isAdmin && !isManager) {
+    return res.status(403).send({ message: 'Forbidden: Admin or Manager access required' });
+  }
+  next();
+};
+
+const requireAdmin = (req, res, next) => {
+  const role = req.headers['x-user-role'] || '';
+  const email = req.headers['x-user-email'] || '';
+  const isAdmin = role === 'admin' || email.includes('admin');
+  if (!isAdmin) {
+    return res.status(403).send({ message: 'Forbidden: Admin access required' });
+  }
+  next();
+};
 
 app.get('/api/featured-challenges', async (req, res) => {
   try {
@@ -396,7 +520,7 @@ app.get('/api/featured-challenges', async (req, res) => {
     const items = await collections.featuredChallenges.find({}).toArray();
     res.send(items);
   } catch (error) {
-    console.error('Error fetching featured challenges:', error);
+    log('Error fetching featured challenges:', error);
     res.status(500).send({ message: 'Unable to fetch featured challenges' });
   }
 });
@@ -408,7 +532,7 @@ app.get('/api/stats/live', async (req, res) => {
     const items = await collections.liveStats.find({}).toArray();
     res.send(items);
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    log('Error fetching stats:', error);
     res.status(500).send({ message: 'Unable to fetch statistics' });
   }
 });
@@ -484,7 +608,7 @@ app.get('/api/challenges', async (req, res) => {
     const normalized = items.map(normalizeChallenge);
     res.send(normalized);
   } catch (error) {
-    console.error('Error fetching challenges list:', error);
+    log('Error fetching challenges list:', error);
     res.status(500).send({ message: 'Unable to fetch challenges' });
   }
 });
@@ -501,7 +625,7 @@ app.get('/api/challenges/active', async (req, res) => {
     const normalized = items.map(normalizeChallenge);
     res.send(normalized);
   } catch (error) {
-    console.error('Error fetching challenges:', error);
+    log('Error fetching challenges:', error);
     res.status(500).send({ message: 'Unable to fetch challenges' });
   }
 });
@@ -521,7 +645,7 @@ app.get('/api/challenges/:id', async (req, res) => {
     }
     res.send(normalizeChallenge(challenge));
   } catch (error) {
-    console.error('Error fetching challenge:', error);
+    log('Error fetching challenge:', error);
     res.status(500).send({ message: 'Unable to fetch challenge' });
   }
 });
@@ -564,7 +688,7 @@ app.post('/api/challenges', async (req, res) => {
     const result = await collections.challenges.insertOne(doc);
     res.status(201).send(normalizeChallenge({ _id: result.insertedId, ...doc }));
   } catch (error) {
-    console.error('Error creating challenge:', error);
+    log('Error creating challenge:', error);
     res.status(500).send({ message: 'Unable to create challenge' });
   }
 });
@@ -622,7 +746,7 @@ const updateChallengeHandler = async (req, res) => {
     }
     res.send(normalizeChallenge(result.value));
   } catch (error) {
-    console.error('Error updating challenge:', error);
+    log('Error updating challenge:', error);
     res.status(500).send({ message: 'Unable to update challenge' });
   }
 };
@@ -646,7 +770,7 @@ app.delete('/api/challenges/:id', async (req, res) => {
     await collections.userChallenges.deleteMany({ challengeId });
     res.send({ message: 'Challenge deleted' });
   } catch (error) {
-    console.error('Error deleting challenge:', error);
+    log('Error deleting challenge:', error);
     res.status(500).send({ message: 'Unable to delete challenge' });
   }
 });
@@ -665,7 +789,7 @@ app.post('/api/challenges/join/:id', async (req, res) => {
     if (error?.status) {
       return res.status(error.status).send({ message: error.message });
     }
-    console.error('Error joining challenge:', error);
+    log('Error joining challenge:', error);
     res.status(500).send({ message: 'Unable to join challenge' });
   }
 });
@@ -680,7 +804,7 @@ app.post('/api/user-challenges', async (req, res) => {
     if (error?.status) {
       return res.status(error.status).send({ message: error.message });
     }
-    console.error('Error creating user challenge:', error);
+    log('Error creating user challenge:', error);
     res.status(500).send({ message: 'Unable to join challenge' });
   }
 });
@@ -722,7 +846,7 @@ app.get('/api/user-challenges', async (req, res) => {
       res.send(items);
     }
   } catch (error) {
-    console.error('Error fetching user challenges:', error);
+    log('Error fetching user challenges:', error);
     res.status(500).send({ message: 'Unable to fetch user challenges' });
   }
 });
@@ -742,7 +866,7 @@ app.get('/api/user-challenges/:id', async (req, res) => {
     }
     res.send(doc);
   } catch (error) {
-    console.error('Error fetching user challenge:', error);
+    log('Error fetching user challenge:', error);
     res.status(500).send({ message: 'Unable to fetch user challenge' });
   }
 });
@@ -783,7 +907,7 @@ app.patch('/api/user-challenges/:id', async (req, res) => {
     }
     res.send(result.value);
   } catch (error) {
-    console.error('Error updating user challenge:', error);
+    log('Error updating user challenge:', error);
     res.status(500).send({ message: 'Unable to update user challenge' });
   }
 });
@@ -799,7 +923,7 @@ app.get('/api/tips/recent', async (req, res) => {
       .toArray();
     res.send(items);
   } catch (error) {
-    console.error('Error fetching tips:', error);
+    log('Error fetching tips:', error);
     res.status(500).send({ message: 'Unable to fetch tips' });
   }
 });
@@ -815,7 +939,7 @@ app.get('/api/events/upcoming', async (req, res) => {
       .toArray();
     res.send(items);
   } catch (error) {
-    console.error('Error fetching events:', error);
+    log('Error fetching events:', error);
     res.status(500).send({ message: 'Unable to fetch events' });
   }
 });
@@ -832,7 +956,7 @@ app.get('/api/users', async (req, res) => {
     const sanitized = items.map(({ password, ...user }) => user);
     res.send(sanitized);
   } catch (error) {
-    console.error('Error fetching users:', error);
+    log('Error fetching users:', error);
     res.status(500).send({ message: 'Unable to fetch users' });
   }
 });
@@ -849,7 +973,7 @@ app.get('/api/users/:email', async (req, res) => {
     const { password, ...sanitized } = user;
     res.send(sanitized);
   } catch (error) {
-    console.error('Error fetching user:', error);
+    log('Error fetching user:', error);
     res.status(500).send({ message: 'Unable to fetch user' });
   }
 });
@@ -883,7 +1007,7 @@ app.post('/api/users', async (req, res) => {
     const result = await collections.users.insertOne(doc);
     res.status(201).send({ _id: result.insertedId, ...doc });
   } catch (error) {
-    console.error('Error creating user:', error);
+    log('Error creating user:', error);
     res.status(500).send({ message: 'Unable to create user' });
   }
 });
@@ -906,8 +1030,312 @@ app.patch('/api/users/:email', async (req, res) => {
     }
     res.send(result.value);
   } catch (error) {
-    console.error('Error updating user:', error);
+    log('Error updating user:', error);
     res.status(500).send({ message: 'Unable to update user' });
+  }
+});
+
+// ─── Blogs ────────────────────────────────────────────────────────────────────
+
+app.get('/api/blogs', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { limit, category, q } = req.query;
+    const query = {};
+    if (category) query.category = category;
+    if (q) query.title = { $regex: q, $options: 'i' };
+    let cursor = collections.blogs.find(query).sort({ createdAt: -1 });
+    if (limit) cursor = cursor.limit(Number(limit));
+    const items = await cursor.toArray();
+    res.send(items);
+  } catch (error) {
+    log('Error fetching blogs:', error);
+    res.status(500).send({ message: 'Unable to fetch blogs' });
+  }
+});
+
+app.get('/api/blogs/:slug', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { slug } = req.params;
+    const blog = await collections.blogs.findOne({ slug });
+    if (!blog) return res.status(404).send({ message: 'Blog post not found' });
+    res.send(blog);
+  } catch (error) {
+    log('Error fetching blog:', error);
+    res.status(500).send({ message: 'Unable to fetch blog post' });
+  }
+});
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+app.post('/api/contacts', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { name, email, subject, message } = req.body || {};
+    if (!name || !email || !message) {
+      return res.status(400).send({ message: 'name, email, and message are required' });
+    }
+    // Basic email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).send({ message: 'Invalid email address' });
+    }
+    const doc = {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      subject: subject || 'General Inquiry',
+      message: message.trim(),
+      status: 'unread',
+      createdAt: new Date(),
+    };
+    const result = await collections.contacts.insertOne(doc);
+    res.status(201).send({ _id: result.insertedId, ...doc });
+  } catch (error) {
+    log('Error saving contact:', error);
+    res.status(500).send({ message: 'Unable to save contact message' });
+  }
+});
+
+app.get('/api/contacts', requireAdminOrManager, async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const items = await collections.contacts.find({}).sort({ createdAt: -1 }).toArray();
+    res.send(items);
+  } catch (error) {
+    log('Error fetching contacts:', error);
+    res.status(500).send({ message: 'Unable to fetch contacts' });
+  }
+});
+
+// ─── Aggregated Stats ─────────────────────────────────────────────────────────
+
+app.get('/api/stats', requireAdminOrManager, async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const [users, challenges] = await Promise.all([
+      collections.users.find({}).toArray(),
+      collections.challenges.find({}).toArray(),
+    ]);
+    const now = new Date();
+    const totalParticipants = challenges.reduce((s, c) => s + (c.participants || 0), 0);
+    const activeChallenges = challenges.filter(c => c.endDate && new Date(c.endDate) > now);
+    const expiredChallenges = challenges.filter(c => c.endDate && new Date(c.endDate) <= now);
+    const completionRate = challenges.length
+      ? Math.round((expiredChallenges.length / challenges.length) * 100) + '%'
+      : '0%';
+
+    res.send({
+      totalUsers: users.length,
+      totalChallenges: challenges.length,
+      activeParticipants: totalParticipants,
+      activeChallenges: activeChallenges.length,
+      co2Saved: (totalParticipants * 12).toLocaleString() + ' kg',
+      weeklyGrowth: '+' + activeChallenges.length + ' active',
+      completionRate,
+    });
+  } catch (error) {
+    log('Error fetching stats:', error);
+    res.status(500).send({ message: 'Unable to fetch stats' });
+  }
+});
+
+// ─── Activities (user challenge feed) ────────────────────────────────────────
+
+app.get('/api/activities', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { user } = req.query;
+    if (!user) return res.status(400).send({ message: 'user query param is required' });
+
+    const pipeline = [
+      { $match: { userId: user } },
+      { $sort: { joinDate: -1 } },
+      {
+        $lookup: {
+          from: 'challenges',
+          localField: 'challengeId',
+          foreignField: '_id',
+          as: 'challengeData',
+        },
+      },
+      { $unwind: { path: '$challengeData', preserveNullAndEmptyArrays: true } },
+    ];
+
+    const items = await collections.userChallenges.aggregate(pipeline).toArray();
+    const normalized = items.map(doc => ({
+      _id: doc._id,
+      userId: doc.userId,
+      status: doc.status || 'Not Started',
+      progress: doc.progress || 0,
+      joinedAt: doc.joinDate,
+      lastUpdated: doc.lastUpdated,
+      challengeTitle: doc.challengeData?.title || 'Unknown Challenge',
+      challengeId: doc.challengeId,
+      points: doc.challengeData?.points || 0,
+      co2Saved: doc.challengeData?.co2Saved || 0,
+      category: doc.challengeData?.category || '',
+    }));
+
+    res.send(normalized);
+  } catch (error) {
+    log('Error fetching activities:', error);
+    res.status(500).send({ message: 'Unable to fetch activities' });
+  }
+});
+
+// ─── Chart data endpoints ─────────────────────────────────────────────────────
+
+// Weekly activity: joins per day for the last 7 days
+// ?user=email  →  filter to that user; omit for platform-wide
+app.get('/api/stats/weekly', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { user } = req.query;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const match = { joinDate: { $gte: sevenDaysAgo } };
+    if (user) match.userId = user;
+
+    const raw = await collections.userChallenges.aggregate([
+      { $match: match },
+      { $group: { _id: { $dayOfWeek: '$joinDate' }, tasks: { $sum: 1 } } },
+    ]).toArray();
+
+    // $dayOfWeek: 1=Sun … 7=Sat
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const map = {};
+    raw.forEach(d => { map[d._id] = d.tasks; });
+
+    // Build last 7 days in order starting from today
+    const today = new Date().getDay(); // 0=Sun
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const dow = ((today - i) + 7) % 7; // 0-indexed
+      const mongoKey = dow + 1;           // MongoDB uses 1-indexed
+      const tasks = map[mongoKey] || 0;
+      result.push({ name: dayNames[dow], tasks, points: tasks * 10 });
+    }
+    res.send(result);
+  } catch (error) {
+    log('Error fetching weekly stats:', error);
+    res.status(500).send({ message: 'Unable to fetch weekly stats' });
+  }
+});
+
+// Impact breakdown: challenge count grouped by category (joined challenges)
+// ?user=email  →  filter to that user; omit for platform-wide
+app.get('/api/stats/impact', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { user } = req.query;
+    const match = user ? { userId: user } : {};
+
+    const categoryColors = {
+      'Waste Reduction':      '#22c55e',
+      'Water Conservation':   '#3b82f6',
+      'Green Living':         '#f59e0b',
+      'Energy Conservation':  '#8b5cf6',
+      'Sustainable Transport':'#ef4444',
+    };
+
+    const raw = await collections.userChallenges.aggregate([
+      { $match: match },
+      { $lookup: { from: 'challenges', localField: 'challengeId', foreignField: '_id', as: 'ch' } },
+      { $unwind: { path: '$ch', preserveNullAndEmptyArrays: true } },
+      { $group: { _id: '$ch.category', value: { $sum: 1 } } },
+      { $match: { _id: { $ne: null } } },
+      { $sort: { value: -1 } },
+    ]).toArray();
+
+    const result = raw.map(d => ({
+      name: d._id,
+      value: d.value,
+      color: categoryColors[d._id] || '#94a3b8',
+    }));
+
+    // Fallback when no data yet
+    if (!result.length) {
+      return res.send([
+        { name: 'Waste Reduction',      value: 0, color: '#22c55e' },
+        { name: 'Water Conservation',   value: 0, color: '#3b82f6' },
+        { name: 'Green Living',         value: 0, color: '#f59e0b' },
+        { name: 'Energy Conservation',  value: 0, color: '#8b5cf6' },
+        { name: 'Sustainable Transport',value: 0, color: '#ef4444' },
+      ]);
+    }
+    res.send(result);
+  } catch (error) {
+    log('Error fetching impact stats:', error);
+    res.status(500).send({ message: 'Unable to fetch impact stats' });
+  }
+});
+
+// Monthly platform growth: user sign-ups and challenge creations per month (last 6 months)
+app.get('/api/stats/growth', async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    const [usersByMonth, challengesByMonth] = await Promise.all([
+      collections.users.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        { $group: { _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]).toArray(),
+      collections.challenges.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        { $group: { _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]).toArray(),
+    ]);
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    const result = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const yr = d.getFullYear(), mo = d.getMonth() + 1;
+      const uEntry = usersByMonth.find(e => e._id.year === yr && e._id.month === mo);
+      const cEntry = challengesByMonth.find(e => e._id.year === yr && e._id.month === mo);
+      result.push({
+        month: monthNames[mo - 1],
+        users: uEntry ? uEntry.count : 0,
+        challenges: cEntry ? cEntry.count : 0,
+      });
+    }
+    res.send(result);
+  } catch (error) {
+    log('Error fetching growth stats:', error);
+    res.status(500).send({ message: 'Unable to fetch growth stats' });
+  }
+});
+
+// ─── Delete user by ObjectId ──────────────────────────────────────────────────
+
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
+  try {
+    await dbReady;
+    ensureDb();
+    const { id } = req.params;
+    const userId = toObjectId(id);
+    if (!userId) return res.status(400).send({ message: 'Invalid user id' });
+    const result = await collections.users.findOneAndDelete({ _id: userId });
+    if (!result.value) return res.status(404).send({ message: 'User not found' });
+    res.send({ message: 'User deleted successfully' });
+  } catch (error) {
+    log('Error deleting user:', error);
+    res.status(500).send({ message: 'Unable to delete user' });
   }
 });
 
