@@ -9,6 +9,9 @@ const log = (...args) => { if (isDev) log(...args); };
 const app = express();
 const port = process.env.PORT || 5000;
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const allowedOrigins = [
   'http://localhost:5173',
   'https://eco-track-app.web.app',
